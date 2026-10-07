@@ -1,0 +1,66 @@
+name: Fetch Original Android App Icons
+
+on:
+  push:
+    paths:
+      - '.github/workflows/chatgpt-fetch-original-app-icons.yml'
+  workflow_dispatch:
+
+jobs:
+  fetch-icons:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Google Play original app icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p original-app-icons
+          python3 - <<'PY'
+          import html, re, subprocess, os, urllib.parse
+          apps = {
+            "capcut": "com.lemon.lvoverseas",
+            "filmora": "com.wondershare.filmorago",
+            "kinemaster": "com.nexstreaming.app.kinemasterfree",
+            "picsart": "com.picsart.studio",
+            "camscanner": "com.intsig.camscanner",
+            "lightroom": "com.adobe.lrmobile",
+            "youtube": "com.google.android.youtube",
+            "remini": "com.bigwinepot.nwdn.international",
+            "truecaller": "com.truecaller",
+          }
+          ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128 Safari/537.36"
+          for name, package in apps.items():
+              page = f"https://play.google.com/store/apps/details?id={urllib.parse.quote(package)}&hl=en&gl=US"
+              html_path = f"/tmp/{name}.html"
+              subprocess.run(["curl","-fsSL","--retry","3","-A",ua,page,"-o",html_path], check=True)
+              text = open(html_path, encoding="utf-8", errors="ignore").read()
+              candidates = []
+              for pat in [
+                  r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+                  r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+                  r'https://play-lh\.googleusercontent\.com/[A-Za-z0-9_\-=]+'
+              ]:
+                  m = re.search(pat, text, re.I)
+                  if m:
+                      candidates.append(m.group(1) if m.lastindex else m.group(0))
+              icon_url = html.unescape(candidates[0]) if candidates else ""
+              if not icon_url:
+                  raise SystemExit(f"No icon URL found for {name}")
+              out = f"original-app-icons/{name}.png"
+              subprocess.run(["curl","-fsSL","--retry","3","-A",ua,icon_url,"-o",out], check=True)
+              size = os.path.getsize(out)
+              if size < 2000:
+                  raise SystemExit(f"Icon too small for {name}: {size}")
+              print(name, package, icon_url, size)
+          PY
+
+          file original-app-icons/*
+          ls -lh original-app-icons
+
+      - name: Upload original icons
+        uses: actions/upload-artifact@v4
+        with:
+          name: codekotha-original-app-icons
+          path: original-app-icons/
+          if-no-files-found: error
+          retention-days: 1

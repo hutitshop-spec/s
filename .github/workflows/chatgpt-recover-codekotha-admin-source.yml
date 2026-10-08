@@ -1,0 +1,61 @@
+name: Recover CodeKotha Admin Source
+
+on:
+  push:
+    paths:
+      - '.github/workflows/chatgpt-recover-codekotha-admin-source.yml'
+  workflow_dispatch:
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Recover original Android Studio source
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMIT="49f0d92356180ccda12a41c41c40040c92a33725"
+          : > /tmp/source.b64
+          for i in 00 01 02 03 04 05 06; do
+            git show "$COMMIT:tmp-admin-app/source.b64.part$i" >> /tmp/source.b64
+          done
+          base64 -d /tmp/source.b64 > /tmp/app.tar.gz
+          mkdir -p /tmp/source
+          tar -xzf /tmp/app.tar.gz -C /tmp/source
+          cd /tmp/source
+          cat > CodeKothaAdminApp/README-BN.txt <<'EOF'
+CodeKotha Admin Android App Source
+=================================
+
+Package: com.codekotha.admin
+API Base URL: https://app.codekotha.com/api/admin
+Minimum Android: API 23
+Target/Compile SDK: 35
+
+Build:
+1. Android Studio-তে এই project folder খুলুন।
+2. JDK 17 ব্যবহার করুন।
+3. Gradle Sync করুন।
+4. Build > Build APK(s) অথবা ./gradlew assembleDebug চালান।
+
+গুরুত্বপূর্ণ:
+- Admin/EPS/SMTP/Meta secret app source-এর মধ্যে hardcode করা নেই।
+- App login-এর পরে website Admin API থেকে bearer token পায়।
+- Website v2.2.34 বা পরের version-এর Admin API deploy থাকা প্রয়োজন।
+- Production release-এর জন্য নিজের release keystore দিয়ে signed APK/AAB তৈরি করুন।
+EOF
+          zip -qr /tmp/CodeKotha-Admin-v1.0.0-SOURCE.zip CodeKothaAdminApp
+          sha256sum /tmp/CodeKotha-Admin-v1.0.0-SOURCE.zip
+
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: codekotha-admin-source
+          path: /tmp/CodeKotha-Admin-v1.0.0-SOURCE.zip
+          if-no-files-found: error
+          retention-days: 1

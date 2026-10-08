@@ -1,0 +1,42 @@
+name: Build CodeKotha Admin UI v1.1
+
+on:
+  push:
+    paths:
+      - 'tmp-admin-ui-v110/source.b64.part*'
+      - '.github/workflows/chatgpt-build-codekotha-admin-ui-v110.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Restore and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat tmp-admin-ui-v110/source.b64.part* > /tmp/source.b64
+          base64 -d /tmp/source.b64 > /tmp/source.tar.gz
+          mkdir -p /tmp/work
+          tar -xzf /tmp/source.tar.gz -C /tmp/work
+          cd /tmp/work/CodeKothaAdminApp
+          gradle --no-daemon clean assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/CodeKotha-Admin-v1.1.0-UI.apk
+          cd /tmp/work
+          zip -qr /tmp/CodeKotha-Admin-v1.1.0-SOURCE.zip CodeKothaAdminApp
+          sha256sum /tmp/CodeKotha-Admin-v1.1.0-UI.apk /tmp/CodeKotha-Admin-v1.1.0-SOURCE.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codekotha-admin-v110
+          path: |
+            /tmp/CodeKotha-Admin-v1.1.0-UI.apk
+            /tmp/CodeKotha-Admin-v1.1.0-SOURCE.zip
+          retention-days: 1
